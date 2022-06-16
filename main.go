@@ -20,20 +20,77 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type Product struct {
+	Country string `json:country`
+	Sku     string `json:sku`
+	Name    string `json:name`
+	Stock   string `json:stock_change`
+}
+
 func HandlePanic() { //Recovery Mechanism for the application
 	a := recover()
 	if a != nil {
 		fmt.Println("Recovered from ", a)
 	}
 }
-
-func OpenCSVFile(filePath string, ch chan interface{}, filter map[string]interface{}) bool {
+func OneWriteCSVFile(filePath string, data []string) bool {
 	defer HandlePanic()
 	result := false
 	if len(filePath) <= 0 { //chek if the path has a valid length
 		panic("Invalid filePath length")
 	}
-	file, err := os.OpenFile(os.ExpandEnv(filePath), os.O_RDONLY, 0600) //Read only file pointer, Expand environment variables within a string
+	file, err := os.Create(os.ExpandEnv(filePath))
+	defer func() {
+		err = file.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+	if err != nil { //Check if there was an error opening a file
+		panic(err)
+	}
+	csvwriter := csv.NewWriter(file)
+	defer csvwriter.Flush()
+	err=csvwriter.Write(data)
+	if err!=nil{
+		panic(err)
+	}
+	result=true
+	return result
+}
+
+func WriteCSVFile(filePath string, data [][]string) bool {
+	defer HandlePanic()
+	result := false
+	if len(filePath) <= 0 { //chek if the path has a valid length
+		panic("Invalid filePath length")
+	}
+	file, err := os.Create(os.ExpandEnv(filePath))
+	defer func() {
+		err = file.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+	if err != nil { //Check if there was an error opening a file
+		panic(err)
+	}
+	csvwriter := csv.NewWriter(file)
+	defer csvwriter.Flush()
+	err=csvwriter.WriteAll(data)
+	if err!=nil{
+		panic(err)
+	}
+	return result
+}
+
+func ReadCSVFile(filePath string, ch chan interface{}, filter map[string]interface{}) bool {
+	defer HandlePanic()
+	result := false
+	if len(filePath) <= 0 { //chek if the path has a valid length
+		panic("Invalid filePath length")
+	}
+	file, err := os.OpenFile(os.ExpandEnv(filePath), os.O_RDONLY, 0) //Read only file pointer, Expand environment variables within a string
 	defer func() {
 		err = file.Close()
 		if err != nil {
@@ -53,25 +110,9 @@ func OpenCSVFile(filePath string, ch chan interface{}, filter map[string]interfa
 	}
 	fReader := csv.NewReader(file)
 	for {
-		/*data, next, err := fReader.ReadLine() //read line by line since we dont know the size of the whole file.
-		if err == nil && !next {              //data was read successfully
-			ch <- data
-			continue
-		}
-		if next { //If buffer for reading is too small
-			panic("Buffer provided is too small")
-		}
-		if err == io.EOF { //End of file reached
-			result = true
-			break
-		}
-		if err != nil { //Any other error that may occur
-			panic(err)
-		}*/
 		data, err := fReader.Read()
 		if err == nil { //data was read successfully
-
-			if len(filter) == 0 {
+			if len(filter) == 0 {// no filter just returns all data
 				ch <- data
 			} else {
 				unmatched := 0
@@ -118,17 +159,66 @@ func OpenCSVFile(filePath string, ch chan interface{}, filter map[string]interfa
 	return result
 }
 
-type Product struct {
-	Country string `json:country`
-	Sku     string `json:sku`
-	Name    string `json:name`
-	Stock   string `json:stock_change`
+func DeleteCSVRecord(filePath string,record []string)bool{
+	defer HandlePanic()
+	result := false
+	if len(filePath) <= 0 { //chek if the path has a valid length
+		panic("Invalid filePath length")
+	}
+	file, err := os.OpenFile(os.ExpandEnv(filePath),os.O_RDWR,0)
+	defer func() {
+		err = file.Close()
+		if err != nil {
+			panic(err)
+		}
+	}()
+	if err != nil { //Check if there was an error opening a file
+		panic(err)
+	}
+	row1, err := bufio.NewReader(file).ReadSlice('"') //Read the column name
+	if err != nil {
+		panic(err)
+	}
+	_,err = file.Seek(int64(len(row1)-1), io.SeekStart)
+	if err != nil {
+		panic(err)
+	}
+	sc:= csv.NewReader(file)
+	data,err:=sc.ReadAll()
+	err=os.Remove(filePath)
+	if err!=nil{
+		panic(err)
+	}
+	var index=-1
+	for i,row:=range data{
+		if row[0]==record[0] && row[1]==record[1] && row[2]==record[2]{
+			index=i
+			break;
+		}
+	}	
+	fmt.Println(index)
+	if index!=-1 {
+		var snc sync.WaitGroup
+		snc.Add(2)
+		go func(){
+			defer snc.Done()
+			WriteCSVFile(filePath,data[0:index])
+		}()
+
+		go func(){
+			defer snc.Done()
+			WriteCSVFile(filePath,data[index+1:])
+		}()
+		snc.Wait()
+	}
+	result=true
+	return result
 }
 
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", os.Getenv("IP")+":"+os.Getenv("PORT"))
+			w.Header().Set("Access-Control-Allow-Origin", os.Getenv("IP")+":"+os.Getenv("PORT")) //Allow requests within server
 			defer HandlePanic()
 			content := r.Header.Get("Content-Type")
 			contentType, _, err := mime.ParseMediaType(content)
@@ -166,13 +256,13 @@ func QueryProductsFunc(w http.ResponseWriter, r *http.Request) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		OpenCSVFile("$HOME/Desktop/Jumia/challenge_files/file_1.csv", ch, filter)
+		ReadCSVFile("$HOME/Desktop/Jumia/challenge_files/file_1.csv", ch, filter)
 
 	}()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		OpenCSVFile("$HOME/Desktop/Jumia/challenge_files/file_2.csv", ch1, filter)
+		ReadCSVFile("$HOME/Desktop/Jumia/challenge_files/file_2.csv", ch1, filter)
 
 	}()
 	go func() {
@@ -226,6 +316,10 @@ func MakeOrderFunc(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Stock quantity field required", http.StatusForbidden)
 		return
 	}
+	if _, found := filter["country"]; !found {
+		http.Error(w, "Country field required", http.StatusForbidden)
+		return
+	}
 	d, err := json.Marshal(filter)
 	if err != nil {
 		http.Error(w, "Error Parsing json data", http.StatusInternalServerError)
@@ -238,13 +332,44 @@ func MakeOrderFunc(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 	var existProd = []Product{}
-	json.NewDecoder(resp.Body).Decode(&existProd)
-	if len(existProd) == 0 {
+	err = json.NewDecoder(resp.Body).Decode(&existProd)
+	if err != nil || len(existProd) == 0 {
 		http.Error(w, "Quantity requested not available", http.StatusForbidden)
 		return
 	}
-	json.NewEncoder(w).Encode(existProd)
-
+	var x int
+	var snc sync.WaitGroup
+	snc.Add(2)
+	searchstring:=[]string{existProd[0].Country,existProd[0].Sku,existProd[0].Name}
+	go func(){	
+		defer snc.Done()
+		DeleteCSVRecord("/home/john/Desktop/Jumia/challenge_files/file_1.csv",searchstring)
+		x=0
+		}()
+	go func(){	
+		defer snc.Done()
+		DeleteCSVRecord("/home/john/Desktop/Jumia/challenge_files/file_2.csv",searchstring)
+		x=1	
+	}()
+	snc.Wait()
+	val,err:=strconv.Atoi(existProd[0].Stock)
+	if err!=nil{
+		http.Error(w,"Numeric conversion",http.StatusInternalServerError)
+		return
+	}
+	val1,err:=strconv.Atoi(string(filter["stock_change"].(string)))
+	if err!=nil{
+		http.Error(w,"Numeric conversion",http.StatusInternalServerError)
+		return
+	}
+	existProd[0].Stock=strconv.Itoa(val-val1)
+	if x==0{		
+		OneWriteCSVFile("/home/john/Desktop/Jumia/challenge_files/file_1.csv",[]string{existProd[0].Country,existProd[0].Sku,existProd[0].Name,existProd[0].Stock})
+	}
+	if x==1{
+		OneWriteCSVFile("/home/john/Desktop/Jumia/challenge_files/file_2.csv",[]string{existProd[0].Country,existProd[0].Sku,existProd[0].Name,existProd[0].Stock})
+	}
+	json.NewEncoder(w).Encode(existProd[0])
 }
 
 func main() {
