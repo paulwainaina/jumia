@@ -9,7 +9,7 @@ type TestPath struct{
 }
 
 func TestDeleteCSVRecord(t *testing.T){
-	path:="/home/john/Desktop/Jumia/sample.csv"
+	path:="$HOME/Desktop/Jumia/sample.csv"
 	record:=[]string{"eg","cbf87a9be799","Foster-Harrell Table","35"}
 	if !DeleteCSVRecord(path,record){
 		t.Fatalf("Somewthing went wrong")
