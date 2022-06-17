@@ -343,12 +343,12 @@ func MakeOrderFunc(w http.ResponseWriter, r *http.Request) {
 	searchstring:=[]string{existProd[0].Country,existProd[0].Sku,existProd[0].Name}
 	go func(){	
 		defer snc.Done()
-		DeleteCSVRecord("/home/john/Desktop/Jumia/challenge_files/file_1.csv",searchstring)
+		DeleteCSVRecord("$HOME/Desktop/Jumia/challenge_files/file_1.csv",searchstring)
 		x=0
 		}()
 	go func(){	
 		defer snc.Done()
-		DeleteCSVRecord("/home/john/Desktop/Jumia/challenge_files/file_2.csv",searchstring)
+		DeleteCSVRecord("$HOME/Desktop/Jumia/challenge_files/file_2.csv",searchstring)
 		x=1	
 	}()
 	snc.Wait()
@@ -364,10 +364,10 @@ func MakeOrderFunc(w http.ResponseWriter, r *http.Request) {
 	}
 	existProd[0].Stock=strconv.Itoa(val-val1)
 	if x==0{		
-		OneWriteCSVFile("/home/john/Desktop/Jumia/challenge_files/file_1.csv",[]string{existProd[0].Country,existProd[0].Sku,existProd[0].Name,existProd[0].Stock})
+		OneWriteCSVFile("$HOME/Desktop/Jumia/challenge_files/file_1.csv",[]string{existProd[0].Country,existProd[0].Sku,existProd[0].Name,existProd[0].Stock})
 	}
 	if x==1{
-		OneWriteCSVFile("/home/john/Desktop/Jumia/challenge_files/file_2.csv",[]string{existProd[0].Country,existProd[0].Sku,existProd[0].Name,existProd[0].Stock})
+		OneWriteCSVFile("$HOME/Desktop/Jumia/challenge_files/file_2.csv",[]string{existProd[0].Country,existProd[0].Sku,existProd[0].Name,existProd[0].Stock})
 	}
 	json.NewEncoder(w).Encode(existProd[0])
 }
